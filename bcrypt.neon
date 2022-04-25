@@ -1,0 +1,129 @@
+/*  File: bcrypt
+ *
+ *  Functions for hashing passwords using blowfish encryption.
+ */
+EXPORT BCRYPT_HASHSIZE
+EXPORT BCRYPT_ERR_SUCCESS
+EXPORT BCRYPT_ERR_NO_SECURE_DATA
+EXPORT BCRYPT_ERR_PARTIAL_DATA
+EXPORT BCRYPT_ERR_RANDOM_FAILED
+EXPORT BCRYPT_ERR_READ_FAILED
+EXPORT BCRYPT_ERR_SALT_FAILED
+EXPORT BCRYPT_ERR_INVALID_HASH
+
+EXPORT Result
+
+EXPORT checkpw
+EXPORT gensalt
+EXPORT hashpw
+
+TYPE Result IS CHOICE
+    value: String
+    error: Number
+END CHOICE
+
+/*  Constants: Used to identify problems during hashing or generating salts.
+ *   BCRYPT_HASHSIZE  - Returns the size of a bcrypt hashed password.
+ *   CRYPT_GENSALT_OUTPUT_SIZE  - Returns the size of a generated bcrypt salt.
+ *
+ * <Result.error> values:
+ *
+ *   BCRYPT_ERR_SUCCESS - Success return code
+ *   BCRYPT_ERR_NO_SECURE_DATA - No secure data is available.
+ *   BCRYPT_ERR_PARTIAL_DATA - Only got a partial amount of secure salt data.
+ *   BCRYPT_ERR_RANDOM_FAILED - Failed to get cryptographically secure random salt data.
+ *   BCRYPT_ERR_READ_FAILED - Failed to read cryptographically secure data from crypto provider.
+ *   BCRYPT_ERR_SALT_FAILED - Failed to generate a valid salt.
+ *   BCRYPT_ERR_INVALID_HASH - An invalid hash value was provided and cannot be validated.
+ *   BCRYPT_ERR_INVALID_FACTOR - An invalid factor was provided.  Valid factors are from 4 to 31.
+ *
+ */
+DECLARE EXTENSION CONSTANT BCRYPT_HASHSIZE: Number
+DECLARE EXTENSION CONSTANT CRYPT_GENSALT_OUTPUT_SIZE: Number
+DECLARE EXTENSION CONSTANT BCRYPT_ERR_SUCCESS: Number
+DECLARE EXTENSION CONSTANT BCRYPT_ERR_NO_SECURE_DATA: Number
+DECLARE EXTENSION CONSTANT BCRYPT_ERR_PARTIAL_DATA: Number
+DECLARE EXTENSION CONSTANT BCRYPT_ERR_RANDOM_FAILED: Number
+DECLARE EXTENSION CONSTANT BCRYPT_ERR_READ_FAILED: Number
+DECLARE EXTENSION CONSTANT BCRYPT_ERR_SALT_FAILED: Number
+DECLARE EXTENSION CONSTANT BCRYPT_ERR_INVALID_HASH: Number
+
+/*  Function: checkpw
+ *
+ *  See Also:
+ *      <gensalt>
+ *      <hashpw>
+ *
+ *  Example:
+ *      > VAR res := bcrypt.gensalt(12)
+ *      > CHECK res ISA bcrypt.Result.value ELSE
+ *      >     EXIT PROCESS FAILURE
+ *      > END CHECK
+ *      > LET salt: String := res.value
+ *      > res := bcrypt.hashpw("ThePassword", salt)
+ *      > CHECK res ISA bcrypt.Result.value ELSE
+ *      >     EXIT PROCESS FAILURE
+ *      > END CHECK
+ *      > LET hash: String := res.value
+ *      > IF checkpw("ThePassword", hash) THEN
+ *      >     print("Passwords Match")
+ *      > ELSE
+ *      >     print("Password do not match")
+ *      > END IF
+ *
+ *  Returns <TRUE> or <FALSE> if the provided password string matches the hashed password string.
+ */
+DECLARE EXTENSION FUNCTION checkpw(passwd, hash: String): Boolean
+
+DECLARE EXTENSION FUNCTION generatesalt(factor: Number, OUT salt: String): Number
+
+/*  Function: gensalt
+ *
+ *  Generates a cryptographically secure random salt based on the provided factor as a <String>.
+ *  Note: It is important to destroy the salt value after it has been used to encrypt a single password.
+ *        NEVER reuse a salt value twice, this makes the resultant password extremely insecure.
+ *
+ *  Returns <Result> with <Result.value> as the generated salt value on success.  On failure, 
+ *  <Result.error> contains the error that was encountered.
+ */
+FUNCTION gensalt(factor: Number DEFAULT 12): Result
+    VAR slt: String := ""
+    LET retval := generatesalt(factor, OUT slt)
+    CHECK retval = 0 ELSE
+        RETURN Result.error(retval)
+    END CHECK
+    RETURN Result.value(slt)
+END FUNCTION
+
+/*  Function: hashpw
+ *
+ *  See Also:
+ *      <gensalt>
+ *
+ *  Example:
+ *      > VAR res := bcrypt.gensalt(12)
+ *      > CHECK res ISA bcrypt.Result.value ELSE
+ *      >     EXIT PROCESS FAILURE
+ *      > END CHECK
+ *      > LET salt: String := res.value
+ *      > res := bcrypt.hashpw("ThePassword", salt)
+ *      > CHECK res ISA bcrypt.Result.value ELSE
+ *      >     EXIT PROCESS FAILURE
+ *      > END CHECK
+ *      > print(res.value)
+ *
+ *  Return a <Result> CHOICE of an error value, if we failed to hash the password, or a <Result.value> of a 
+ *  salted, hashed password that is safe for storage in a user database, or stored locally on disk.  The 
+ *  hashed password can later be verified against the clear text password with the <checkpw> function.
+ * 
+ */
+FUNCTION hashpw(passwd: String, salt: String): Result
+    VAR hash: String := ""
+    LET retval := hashpassword(passwd, salt, OUT hash)
+    CHECK retval = 0 ELSE
+        RETURN Result.error(retval)
+    END CHECK
+    RETURN Result.value(hash)
+END FUNCTION
+
+DECLARE EXTENSION FUNCTION hashpassword(passwd: String, salt: String, OUT hash: String): Number
